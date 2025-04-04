@@ -26,6 +26,7 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
 from torch.utils import tensorboard
 from torch.utils.tensorboard.writer import SummaryWriter
+from skimage.metrics import structural_similarity
 
 
 def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
@@ -235,6 +236,7 @@ class Diffusion(object):
         idx_init = args.subset_start
         idx_so_far = args.subset_start
         avg_psnr = 0.0
+        avg_ssim = 0.0
         pbar = tqdm.tqdm(val_loader)
 
         # Make directory which stores result images
@@ -313,14 +315,23 @@ class Diffusion(object):
                             orig = inverse_data_transform(config, x_orig[j])
                             mse = torch.mean((x[i][j].to(self.device) - orig) ** 2)
                             psnr = 10 * torch.log10(1 / mse)
+                            ssim = structural_similarity(x[i][j].cpu().numpy(), orig.cpu().numpy(), win_size=21, channel_axis=0, data_range=1.0)
                             avg_psnr += psnr
+                            avg_ssim += ssim
 
             idx_so_far += y_0.shape[0]
 
             pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
+            
+            print("PSNR: %.2f SSIM: %.2f" % (avg_psnr / (idx_so_far - idx_init), avg_ssim / (idx_so_far - idx_init)))
+
+            
 
         avg_psnr = avg_psnr / (idx_so_far - idx_init)
+        avg_ssim = avg_ssim / (idx_so_far - idx_init)
         print("Total Average PSNR: %.2f" % avg_psnr)
+        print("Total Average SSIM: %.2f" % avg_ssim)
+        
         print("Number of samples: %d" % (idx_so_far - idx_init))
 
         if config.logger.enable_log:
@@ -329,6 +340,9 @@ class Diffusion(object):
     def sample_image(self, x, model, H_funcs, y_0, sigma_0, last=True, cls_fn=None, classes=None):
         skip = self.num_timesteps // self.config.deblur.timesteps
         seq = range(0, self.num_timesteps, skip)
+        if self.config.deblur.timesteps == 5:
+            seq = range(0, 901, 225)
+            # print(list(seq))
 
         x_init = x
 

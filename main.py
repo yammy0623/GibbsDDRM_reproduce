@@ -66,6 +66,13 @@ def parse_args_and_config():
     parser.add_argument(
         '--subset_end', type=int, default=-1
     )
+    parser.add_argument(
+        '--steps', type=int, default=100
+    )
+    parser.add_argument(
+        '--outfile', type=str, default="result.txt"
+    )
+
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
@@ -142,9 +149,16 @@ def dict2namespace(config):
 
 def main():
     args, config = parse_args_and_config()
+    config.deblur.timesteps = args.steps
+    with open(args.outfile, 'a') as f:
+        pass
+    sys.stdout = open(args.outfile, 'a')
+    print("Denoising with {} steps".format(args.steps))
+    
     logging.info("Writing log file to {}".format(args.log_path))
     logging.info("Exp instance id = {}".format(os.getpid()))
     logging.info("Exp comment = {}".format(args.comment))
+    logging.info("Load Data from {}".format(args.exp))
 
     try:
         runner = Diffusion(args, config)
