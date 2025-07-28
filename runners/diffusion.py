@@ -254,76 +254,152 @@ class Diffusion(object):
             config.logger.image_folder = image_folder
             config.logger.inverse_data_transform = inverse_data_transform
 
-        for x_orig, classes in pbar:
-            
-            batch_size = x_orig.shape[0]
-            kernel_batch = DeblurringArbitral2D.get_blur_kernel_batch(batch_size, config.deblur.kernel_type, self.device)
-            kernel_uncert_batch = \
-                DeblurringArbitral2D.corrupt_kernel_batch(kernel_batch, \
-                                                                 config.deblur.kernel_corruption, \
-                                                                 config.deblur.kernel_corruption_coef)
-
-            H_funcs = DeblurringArbitral2D(kernel_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
-            H_funcs_uncert = DeblurringArbitral2D(kernel_uncert_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
-
-            x_orig = x_orig.to(self.device)
-            x_orig = data_transform(self.config, x_orig)
-
-            y_0 = H_funcs.H(x_orig)            
-            y_0 = y_0 + sigma_0 * torch.randn_like(y_0)
-            
-            # Save images to the directory
-            for i in range(len(y_0)):
-                tvu.save_image(
-                    inverse_data_transform(config, y_0[i].view(config.data.channels, H_funcs.out_img_dim, H_funcs.out_img_dim)), os.path.join(image_folder, f"y0_{idx_so_far + i}.png")
-                )
-                tvu.save_image(
-                    inverse_data_transform(config, x_orig[i]), os.path.join(image_folder, f"orig_{idx_so_far + i}.png")
-                )
-
-            ##Begin GibbsDDRM
-            x = torch.randn(
-                y_0.shape[0],
-                config.data.channels,
-                config.data.image_size,
-                config.data.image_size,
-                device=self.device,
-            )
-
-            # NOTE: This means that we are producing each predicted x0, not x_{t-1} at timestep t.
-            with torch.no_grad():
-
-                x = self.sample_image(x, model, H_funcs_uncert, y_0, sigma_0, last=True, cls_fn=cls_fn, classes=classes)                    
+        
+        if config.data.dataset == "GoPro":
+             print("Using GoPro dataset")
+             for y_0, x_orig in pbar:
                 
-                # Save images of estimated kernel
-                estimated_kernel = H_funcs_uncert.kernel
-                for i in range(estimated_kernel.shape[0]):
-                    tvu.save_image(torch.abs(estimated_kernel[i]) / torch.max(torch.abs(estimated_kernel[i])), os.path.join(image_folder, f"estimated_kernel_{idx_so_far + i}.png"))
+                batch_size = x_orig.shape[0]
+                kernel_batch = DeblurringArbitral2D.get_blur_kernel_batch(batch_size, config.deblur.kernel_type, self.device)
+                kernel_uncert_batch = \
+                    DeblurringArbitral2D.corrupt_kernel_batch(kernel_batch, \
+                                                                    config.deblur.kernel_corruption, \
+                                                                    config.deblur.kernel_corruption_coef)
 
-            x = [inverse_data_transform(config, y) for y in x]
+                H_funcs = DeblurringArbitral2D(kernel_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
+                H_funcs_uncert = DeblurringArbitral2D(kernel_uncert_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
 
-            fun_ssim = StructuralSimilarityIndexMeasure().to(self.device)
-            fun_lpips = LearnedPerceptualImagePatchSimilarity(net_type="alex").to(self.device)
-            with torch.no_grad():
-                        
-                for i in [-1]: #range(len(x)):
-                    for j in range(x[i].size(0)):
-                        tvu.save_image(
-                            x[i][j], os.path.join(image_folder, f"{idx_so_far + j}_{i}.png")
-                        )
-                        if i == len(x)-1 or i == -1:
-                            orig = inverse_data_transform(config, x_orig[j])
-                            mse = torch.mean((x[i][j].to(self.device) - orig) ** 2)
-                            psnr = 10 * torch.log10(1 / mse)
-                            ssim = structural_similarity(x[i][j].cpu().numpy(), orig.cpu().numpy(), win_size=21, channel_axis=0, data_range=1.0)
-                            avg_psnr += psnr
-                            avg_ssim += ssim
+                x_orig = x_orig.to(self.device)
+                x_orig = data_transform(self.config, x_orig)
+                if args.gopro_H:
+                    y_0 = data_transform(self.config, y_0)
+                    y_0 = y_0.to(self.device)
+                else:
+                    y_0 = H_funcs.H(x_orig)            
+                    y_0 = y_0 + sigma_0 * torch.randn_like(y_0)
+                    
+                # Save images to the directory
+                for i in range(len(y_0)):
+                    tvu.save_image(
+                        inverse_data_transform(config, y_0[i].view(config.data.channels, H_funcs.out_img_dim, H_funcs.out_img_dim)), os.path.join(image_folder, f"y0_{idx_so_far + i}.png")
+                    )
+                    tvu.save_image(
+                        inverse_data_transform(config, x_orig[i]), os.path.join(image_folder, f"orig_{idx_so_far + i}.png")
+                    )
 
-            idx_so_far += y_0.shape[0]
+                ##Begin GibbsDDRM
+                x = torch.randn(
+                    y_0.shape[0],
+                    config.data.channels,
+                    config.data.image_size,
+                    config.data.image_size,
+                    device=self.device,
+                )
 
-            pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
-            
-            print("PSNR: %.2f SSIM: %.2f" % (avg_psnr / (idx_so_far - idx_init), avg_ssim / (idx_so_far - idx_init)))
+                # NOTE: This means that we are producing each predicted x0, not x_{t-1} at timestep t.
+                with torch.no_grad():
+
+                    x = self.sample_image(x, model, H_funcs_uncert, y_0, sigma_0, last=True, cls_fn=cls_fn)                    
+                    
+                    # Save images of estimated kernel
+                    estimated_kernel = H_funcs_uncert.kernel
+                    for i in range(estimated_kernel.shape[0]):
+                        tvu.save_image(torch.abs(estimated_kernel[i]) / torch.max(torch.abs(estimated_kernel[i])), os.path.join(image_folder, f"estimated_kernel_{idx_so_far + i}.png"))
+
+                x = [inverse_data_transform(config, y) for y in x]
+
+                with torch.no_grad():
+                            
+                    for i in [-1]: #range(len(x)):
+                        for j in range(x[i].size(0)):
+                            tvu.save_image(
+                                x[i][j], os.path.join(image_folder, f"{idx_so_far + j}_{i}.png")
+                            )
+                            if i == len(x)-1 or i == -1:
+                                orig = inverse_data_transform(config, x_orig[j])
+                                mse = torch.mean((x[i][j].to(self.device) - orig) ** 2)
+                                psnr = 10 * torch.log10(1 / mse)
+                                ssim = structural_similarity(x[i][j].cpu().numpy(), orig.cpu().numpy(), win_size=21, channel_axis=0, data_range=1.0)
+                                avg_psnr += psnr
+                                avg_ssim += ssim
+
+                idx_so_far += y_0.shape[0]
+
+                pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
+                
+                print("PSNR: %.2f SSIM: %.2f" % (avg_psnr / (idx_so_far - idx_init), avg_ssim / (idx_so_far - idx_init)))
+
+        else:
+            for x_orig, classes in pbar:
+                
+                batch_size = x_orig.shape[0]
+                kernel_batch = DeblurringArbitral2D.get_blur_kernel_batch(batch_size, config.deblur.kernel_type, self.device)
+                kernel_uncert_batch = \
+                    DeblurringArbitral2D.corrupt_kernel_batch(kernel_batch, \
+                                                                    config.deblur.kernel_corruption, \
+                                                                    config.deblur.kernel_corruption_coef)
+
+                H_funcs = DeblurringArbitral2D(kernel_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
+                H_funcs_uncert = DeblurringArbitral2D(kernel_uncert_batch, config.data.channels, self.config.data.image_size, self.device, conv_type)
+
+                x_orig = x_orig.to(self.device)
+                x_orig = data_transform(self.config, x_orig)
+
+                y_0 = H_funcs.H(x_orig)            
+                y_0 = y_0 + sigma_0 * torch.randn_like(y_0)
+                
+                # Save images to the directory
+                for i in range(len(y_0)):
+                    tvu.save_image(
+                        inverse_data_transform(config, y_0[i].view(config.data.channels, H_funcs.out_img_dim, H_funcs.out_img_dim)), os.path.join(image_folder, f"y0_{idx_so_far + i}.png")
+                    )
+                    tvu.save_image(
+                        inverse_data_transform(config, x_orig[i]), os.path.join(image_folder, f"orig_{idx_so_far + i}.png")
+                    )
+
+                ##Begin GibbsDDRM
+                x = torch.randn(
+                    y_0.shape[0],
+                    config.data.channels,
+                    config.data.image_size,
+                    config.data.image_size,
+                    device=self.device,
+                )
+
+                # NOTE: This means that we are producing each predicted x0, not x_{t-1} at timestep t.
+                with torch.no_grad():
+
+                    x = self.sample_image(x, model, H_funcs_uncert, y_0, sigma_0, last=True, cls_fn=cls_fn, classes=classes)                    
+                    
+                    # Save images of estimated kernel
+                    estimated_kernel = H_funcs_uncert.kernel
+                    for i in range(estimated_kernel.shape[0]):
+                        tvu.save_image(torch.abs(estimated_kernel[i]) / torch.max(torch.abs(estimated_kernel[i])), os.path.join(image_folder, f"estimated_kernel_{idx_so_far + i}.png"))
+
+                x = [inverse_data_transform(config, y) for y in x]
+
+                fun_ssim = StructuralSimilarityIndexMeasure().to(self.device)
+                fun_lpips = LearnedPerceptualImagePatchSimilarity(net_type="alex").to(self.device)
+                with torch.no_grad():
+                            
+                    for i in [-1]: #range(len(x)):
+                        for j in range(x[i].size(0)):
+                            tvu.save_image(
+                                x[i][j], os.path.join(image_folder, f"{idx_so_far + j}_{i}.png")
+                            )
+                            if i == len(x)-1 or i == -1:
+                                orig = inverse_data_transform(config, x_orig[j])
+                                mse = torch.mean((x[i][j].to(self.device) - orig) ** 2)
+                                psnr = 10 * torch.log10(1 / mse)
+                                ssim = structural_similarity(x[i][j].cpu().numpy(), orig.cpu().numpy(), win_size=21, channel_axis=0, data_range=1.0)
+                                avg_psnr += psnr
+                                avg_ssim += ssim
+
+                idx_so_far += y_0.shape[0]
+
+                pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
+                
+                print("PSNR: %.2f SSIM: %.2f" % (avg_psnr / (idx_so_far - idx_init), avg_ssim / (idx_so_far - idx_init)))
 
             
 

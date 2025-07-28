@@ -211,7 +211,26 @@ def get_dataset(args, config):
                                               transforms.ToTensor()])
             )
             test_dataset = dataset
-    
+    elif config.data.dataset == "GoPro":
+        from datasets.gopro import GoProDataset, CenterCropResize
+        transform = transforms.Compose([
+            CenterCropResize(config.data.image_size),
+            transforms.ToTensor()
+        ])
+
+        if config.data.out_of_dist:
+            gopro_dataset = GoProDataset(root_dir=os.path.join(args.exp, 'datasets/test'), data_type=args.datatype, transform=transform)
+            dataset = gopro_dataset
+            test_dataset = gopro_dataset
+        else:
+            # train
+            test_dataset = GoProDataset(root_dir=os.path.join(args.exp, 'datasets/train'), data_type=args.datatype, transform=transform)
+            
+            # test
+            train_dataset = GoProDataset(root_dir=os.path.join(args.exp, 'datasets/test'), data_type=args.datatype, transform=transform)
+            
+
+            dataset = train_dataset    
     else:
         dataset, test_dataset = None, None
 

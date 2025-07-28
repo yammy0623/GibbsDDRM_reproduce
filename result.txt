@@ -1,0 +1,28 @@
+Denoising with 5 steps
+Dataset has size 1000
+Start from 0
+Denoising with 5 steps
+Dataset has size 1000
+Start from 0
+Denoising with 5 steps
+Dataset has size 1000
+Start from 0
+Denoising with 5 steps
+Dataset has size 2103
+Start from 0
+PSNR: 14.07 SSIM: 0.27
+Denoising with 100 steps
+Dataset has size 2103
+Start from 0
+PSNR: 17.96 SSIM: 0.48
+PSNR: 17.72 SSIM: 0.50
+PSNR: 17.56 SSIM: 0.46
+Denoising with 100 steps
+Dataset has size 2103
+Start from 0
+PSNR: 18.62 SSIM: 0.53
+Denoising with 100 steps
+Dataset has size 2103
+Start from 0
+Using GoPro dataset
+PSNR: 12.48 SSIM: 0.22

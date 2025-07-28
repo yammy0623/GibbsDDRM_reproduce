@@ -55,10 +55,10 @@ def sample_gibbsddrm(x, seq, model, b, H_funcs, y_0, sigma_0, etaB, etaA, etaC, 
 
             cnt += 1
             # if there is no folder, create it
-            if not os.path.exists("/tmp2/ICML2025/ffhq/5step"):
-                os.makedirs("/tmp2/ICML2025/ffhq/5step")
-            save_fig(config, x0_t[0], "x0.png", "/tmp2/ICML2025/ffhq/5step")
-            save_fig(config, xt_next[0], "x_next.png", "/tmp2/ICML2025/ffhq/5step")
+            if not os.path.exists("/tmp2/ICML2025/gopro/5step"):
+                os.makedirs("/tmp2/ICML2025/gopro/5step")
+            save_fig(config, x0_t[0], "x0.png", "/tmp2/ICML2025/gopro/5step")
+            save_fig(config, xt_next[0], "x_next.png", "/tmp2/ICML2025/gopro/5step")
 
 
     return xs, x0_preds, y_0s, kernels

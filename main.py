@@ -20,6 +20,13 @@ def parse_args_and_config():
     parser.add_argument(
         "--config", type=str, required=True, help="Path to the config file"
     )
+    parser.add_argument(
+        '--datatype', type=str, default="blur", choices=["blur", "blur_gamma"]
+    )
+    parser.add_argument(
+        '--gopro_H', action="store_true"
+    )
+    
     parser.add_argument("--seed", type=int, default=1234, help="Random seed")
     parser.add_argument(
         "--exp", type=str, default="exp", help="Path for saving running related data."
@@ -72,7 +79,7 @@ def parse_args_and_config():
     parser.add_argument(
         '--outfile', type=str, default="result.txt"
     )
-
+    
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
